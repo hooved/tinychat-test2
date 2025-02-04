@@ -1602,7 +1602,8 @@ var<workgroup> temp0: array<i32, 256>;
         }
 
         return async (data0,data1,progress) => {
-            const commandEncoder = device.createCommandEncoder();
+            let commandEncoder = device.createCommandEncoder();
+            let gpuCommands;
 
           loadingMessage = `gpuWriteBuffer0.mapAsync`;
           progress(100,100,loadingMessage);
@@ -1630,6 +1631,10 @@ commandEncoder.copyBufferToBuffer(gpuWriteBuffer0, 0, input0, 0, gpuWriteBuffer0
 commandEncoder.copyBufferToBuffer(gpuWriteBuffer1, 0, input1, 0, gpuWriteBuffer1.size);
 
             addComputePass(device, commandEncoder, piplines[0], [buf_0, buf_1, input0, buf_2], [16, 64, 1]);
+            gpuCommands = commandEncoder.finish();
+            device.queue.submit([gpuCommands]);
+            await device.queue.onSubmittedWorkDone();
+            commandEncoder = device.createCommandEncoder();
         addComputePass(device, commandEncoder, piplines[1], [buf_3, buf_0], [2048, 1, 1]);
         addComputePass(device, commandEncoder, piplines[2], [buf_4, buf_3], [1, 1, 1]);
         addComputePass(device, commandEncoder, piplines[3], [buf_5, buf_3, buf_4, buf_6], [16, 1, 1]);
@@ -1660,6 +1665,10 @@ commandEncoder.copyBufferToBuffer(gpuWriteBuffer1, 0, input1, 0, gpuWriteBuffer1
         addComputePass(device, commandEncoder, piplines[28], [buf_20, buf_19, input1], [1, 1, 1]);
         addComputePass(device, commandEncoder, piplines[29], [buf_21, buf_19, buf_20, input1], [1, 1, 1]);
         addComputePass(device, commandEncoder, piplines[30], [buf_22, buf_19, buf_20, buf_21, input1], [data1[0] + 1, 1, 1]);
+            gpuCommands = commandEncoder.finish();
+            device.queue.submit([gpuCommands]);
+            await device.queue.onSubmittedWorkDone();
+            commandEncoder = device.createCommandEncoder();
         addComputePass(device, commandEncoder, piplines[31], [buf_18, buf_22, buf_43, input1], [4, 1, 1]);
         addComputePass(device, commandEncoder, piplines[32], [buf_15, buf_32, buf_18, buf_46, buf_47], [2048, 1, 1]);
         addComputePass(device, commandEncoder, piplines[33], [buf_4, buf_15], [1, 1, 1]);
@@ -1690,6 +1699,10 @@ commandEncoder.copyBufferToBuffer(gpuWriteBuffer1, 0, input1, 0, gpuWriteBuffer1
         addComputePass(device, commandEncoder, piplines[58], [buf_79, buf_77, buf_80, buf_81], [512, 1, 1]);
         addComputePass(device, commandEncoder, piplines[59], [buf_82, buf_77, buf_83, buf_84], [512, 1, 1]);
         addComputePass(device, commandEncoder, piplines[60], [buf_85, buf_79, buf_14, buf_82, input1], [4, 1, 1]);
+            gpuCommands = commandEncoder.finish();
+            device.queue.submit([gpuCommands]);
+            await device.queue.onSubmittedWorkDone();
+            commandEncoder = device.createCommandEncoder();
         addComputePass(device, commandEncoder, piplines[61], [buf_18, buf_77, buf_86, buf_87], [2048, 1, 1]);
         addComputePass(device, commandEncoder, piplines[62], [buf_15, buf_18, buf_14, input1], [2, 1, 1]);
         addComputePass(device, commandEncoder, piplines[63], [buf_19, buf_15, buf_85, input1], [data1[0] + 1, 2, 1]);
@@ -1720,6 +1733,10 @@ commandEncoder.copyBufferToBuffer(gpuWriteBuffer1, 0, input1, 0, gpuWriteBuffer1
         addComputePass(device, commandEncoder, piplines[88], [buf_15, buf_18, buf_4, buf_111], [16, 1, 1]);
         addComputePass(device, commandEncoder, piplines[89], [buf_26, buf_15, buf_112, buf_113], [64, 1, 1]);
         addComputePass(device, commandEncoder, piplines[90], [buf_29, buf_15, buf_114, buf_115, buf_26], [64, 1, 1]);
+            gpuCommands = commandEncoder.finish();
+            device.queue.submit([gpuCommands]);
+            await device.queue.onSubmittedWorkDone();
+            commandEncoder = device.createCommandEncoder();
         addComputePass(device, commandEncoder, piplines[91], [buf_116, buf_18, buf_29, buf_117, buf_118], [2048, 1, 1]);
         addComputePass(device, commandEncoder, piplines[92], [buf_4, buf_116], [1, 1, 1]);
         addComputePass(device, commandEncoder, piplines[93], [buf_119, buf_116, buf_4, buf_120], [16, 1, 1]);
@@ -1750,6 +1767,10 @@ commandEncoder.copyBufferToBuffer(gpuWriteBuffer1, 0, input1, 0, gpuWriteBuffer1
         addComputePass(device, commandEncoder, piplines[118], [buf_20, buf_19, input1], [1, 1, 1]);
         addComputePass(device, commandEncoder, piplines[119], [buf_21, buf_19, buf_20, input1], [1, 1, 1]);
         addComputePass(device, commandEncoder, piplines[120], [buf_22, buf_19, buf_20, buf_21, input1], [data1[0] + 1, 1, 1]);
+            gpuCommands = commandEncoder.finish();
+            device.queue.submit([gpuCommands]);
+            await device.queue.onSubmittedWorkDone();
+            commandEncoder = device.createCommandEncoder();
         addComputePass(device, commandEncoder, piplines[121], [buf_15, buf_22, buf_148, input1], [4, 1, 1]);
         addComputePass(device, commandEncoder, piplines[122], [buf_18, buf_137, buf_15, buf_151, buf_152], [2048, 1, 1]);
         addComputePass(device, commandEncoder, piplines[123], [buf_4, buf_18], [1, 1, 1]);
@@ -1780,6 +1801,10 @@ commandEncoder.copyBufferToBuffer(gpuWriteBuffer1, 0, input1, 0, gpuWriteBuffer1
         addComputePass(device, commandEncoder, piplines[148], [buf_184, buf_182, buf_185, buf_186], [512, 1, 1]);
         addComputePass(device, commandEncoder, piplines[149], [buf_187, buf_182, buf_188, buf_189], [512, 1, 1]);
         addComputePass(device, commandEncoder, piplines[150], [buf_190, buf_184, buf_14, buf_187, input1], [4, 1, 1]);
+            gpuCommands = commandEncoder.finish();
+            device.queue.submit([gpuCommands]);
+            await device.queue.onSubmittedWorkDone();
+            commandEncoder = device.createCommandEncoder();
         addComputePass(device, commandEncoder, piplines[151], [buf_15, buf_182, buf_191, buf_192], [2048, 1, 1]);
         addComputePass(device, commandEncoder, piplines[152], [buf_18, buf_15, buf_14, input1], [2, 1, 1]);
         addComputePass(device, commandEncoder, piplines[153], [buf_19, buf_18, buf_190, input1], [data1[0] + 1, 2, 1]);
@@ -1810,6 +1835,10 @@ commandEncoder.copyBufferToBuffer(gpuWriteBuffer1, 0, input1, 0, gpuWriteBuffer1
         addComputePass(device, commandEncoder, piplines[178], [buf_18, buf_15, buf_4, buf_216], [16, 1, 1]);
         addComputePass(device, commandEncoder, piplines[179], [buf_26, buf_18, buf_217, buf_218], [64, 1, 1]);
         addComputePass(device, commandEncoder, piplines[180], [buf_29, buf_18, buf_219, buf_220, buf_26], [64, 1, 1]);
+            gpuCommands = commandEncoder.finish();
+            device.queue.submit([gpuCommands]);
+            await device.queue.onSubmittedWorkDone();
+            commandEncoder = device.createCommandEncoder();
         addComputePass(device, commandEncoder, piplines[181], [buf_221, buf_15, buf_29, buf_222, buf_223], [2048, 1, 1]);
         addComputePass(device, commandEncoder, piplines[182], [buf_4, buf_221], [1, 1, 1]);
         addComputePass(device, commandEncoder, piplines[183], [buf_224, buf_221, buf_4, buf_225], [16, 1, 1]);
@@ -1840,6 +1869,10 @@ commandEncoder.copyBufferToBuffer(gpuWriteBuffer1, 0, input1, 0, gpuWriteBuffer1
         addComputePass(device, commandEncoder, piplines[208], [buf_20, buf_19, input1], [1, 1, 1]);
         addComputePass(device, commandEncoder, piplines[209], [buf_21, buf_19, buf_20, input1], [1, 1, 1]);
         addComputePass(device, commandEncoder, piplines[210], [buf_22, buf_19, buf_20, buf_21, input1], [data1[0] + 1, 1, 1]);
+            gpuCommands = commandEncoder.finish();
+            device.queue.submit([gpuCommands]);
+            await device.queue.onSubmittedWorkDone();
+            commandEncoder = device.createCommandEncoder();
         addComputePass(device, commandEncoder, piplines[211], [buf_18, buf_22, buf_253, input1], [4, 1, 1]);
         addComputePass(device, commandEncoder, piplines[212], [buf_15, buf_242, buf_18, buf_256, buf_257], [2048, 1, 1]);
         addComputePass(device, commandEncoder, piplines[213], [buf_4, buf_15], [1, 1, 1]);
@@ -1880,6 +1913,10 @@ commandEncoder.copyBufferToBuffer(gpuWriteBuffer1, 0, input1, 0, gpuWriteBuffer1
         addComputePass(device, commandEncoder, piplines[248], [buf_15, buf_284, buf_18, buf_298, buf_299], [2048, 1, 1]);
         addComputePass(device, commandEncoder, piplines[249], [buf_4, buf_15], [1, 1, 1]);
         addComputePass(device, commandEncoder, piplines[250], [buf_18, buf_15, buf_4, buf_300], [16, 1, 1]);
+            gpuCommands = commandEncoder.finish();
+            device.queue.submit([gpuCommands]);
+            await device.queue.onSubmittedWorkDone();
+            commandEncoder = device.createCommandEncoder();
         addComputePass(device, commandEncoder, piplines[251], [buf_26, buf_18, buf_301, buf_302], [64, 1, 1]);
         addComputePass(device, commandEncoder, piplines[252], [buf_29, buf_18, buf_303, buf_304, buf_26], [64, 1, 1]);
         addComputePass(device, commandEncoder, piplines[253], [buf_305, buf_15, buf_29, buf_306, buf_307], [2048, 1, 1]);
@@ -1910,6 +1947,10 @@ commandEncoder.copyBufferToBuffer(gpuWriteBuffer1, 0, input1, 0, gpuWriteBuffer1
         addComputePass(device, commandEncoder, piplines[278], [buf_18, buf_329, buf_341, buf_342], [2048, 1, 1]);
         addComputePass(device, commandEncoder, piplines[279], [buf_4, buf_339, buf_340], [1, 1, 1]);
         addComputePass(device, commandEncoder, piplines[280], [buf_15, buf_18, buf_14, input1], [2, 1, 1]);
+            gpuCommands = commandEncoder.finish();
+            device.queue.submit([gpuCommands]);
+            await device.queue.onSubmittedWorkDone();
+            commandEncoder = device.createCommandEncoder();
         addComputePass(device, commandEncoder, piplines[281], [buf_19, buf_15, buf_337, input1], [data1[0] + 1, 2, 1]);
         addComputePass(device, commandEncoder, piplines[282], [buf_20, buf_19, input1], [1, 1, 1]);
         addComputePass(device, commandEncoder, piplines[283], [buf_21, buf_19, buf_20, input1], [1, 1, 1]);
@@ -1923,7 +1964,15 @@ commandEncoder.copyBufferToBuffer(gpuWriteBuffer1, 0, input1, 0, gpuWriteBuffer1
         addComputePass(device, commandEncoder, piplines[291], [buf_351, buf_15, buf_29, buf_352, buf_353], [2048, 1, 1]);
         addComputePass(device, commandEncoder, piplines[292], [buf_345, buf_351], [1, 1, 1]);
         addComputePass(device, commandEncoder, piplines[293], [buf_15, buf_351, buf_345, buf_354], [16, 1, 1]);
+            gpuCommands = commandEncoder.finish();
+            device.queue.submit([gpuCommands]);
+            await device.queue.onSubmittedWorkDone();
+            commandEncoder = device.createCommandEncoder();
         addComputePass(device, commandEncoder, piplines[294], [buf_355, buf_15, buf_356], [8016, 1, 1]);
+            gpuCommands = commandEncoder.finish();
+            device.queue.submit([gpuCommands]);
+            await device.queue.onSubmittedWorkDone();
+            commandEncoder = device.createCommandEncoder();
         addComputePass(device, commandEncoder, piplines[295], [buf_357, buf_355], [8, 1, 1]);
         addComputePass(device, commandEncoder, piplines[296], [buf_345, buf_357], [1, 1, 1]);
         addComputePass(device, commandEncoder, piplines[297], [buf_357, buf_355, buf_345], [8, 1, 1]);
@@ -1934,8 +1983,9 @@ commandEncoder.copyBufferToBuffer(gpuWriteBuffer1, 0, input1, 0, gpuWriteBuffer1
         addComputePass(device, commandEncoder, piplines[302], [buf_362, buf_4, buf_360, buf_361], [8, 1, 1]);
         addComputePass(device, commandEncoder, piplines[303], [output0, buf_362], [1, 1, 1]);
             commandEncoder.copyBufferToBuffer(output0, 0, gpuReadBuffer, 0, output0.size);
-            const gpuCommands = commandEncoder.finish();
+            gpuCommands = commandEncoder.finish();
             device.queue.submit([gpuCommands]);
+            await device.queue.onSubmittedWorkDone();
 
     const tok = data0[0];
     loadingMessage = `tok=${tok}; gpuReadBuffer.mapAsync`;
