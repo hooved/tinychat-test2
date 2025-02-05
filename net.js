@@ -1945,7 +1945,11 @@ commandEncoder.copyBufferToBuffer(gpuWriteBuffer1, 0, input1, 0, gpuWriteBuffer1
     const tok = data0[0];
     loadingMessage = `tok=${tok}; gpuReadBuffer.mapAsync`;
     progress(100,100,loadingMessage);
+
             await gpuReadBuffer.mapAsync(GPUMapMode.READ);
+
+    loadingMessage = `tok=${tok}; after gpuReadBuffer.mapAsync`;
+    progress(100,100,loadingMessage);
             /*
             await gpuReadBuffer.mapAsync(GPUMapMode.READ).catch(err => {
   console.error("Mapping failed:", err);
@@ -1965,6 +1969,8 @@ if (error) {
 
             const resultBuffer = new Int32Array(gpuReadBuffer.size/4);
             resultBuffer.set(new Int32Array(gpuReadBuffer.getMappedRange()));
+    loadingMessage = `tok=${tok}; after getMappedRange`;
+    progress(100,100,loadingMessage);
             gpuReadBuffer.unmap();
             return resultBuffer;
         }
