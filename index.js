@@ -516,14 +516,16 @@ document.addEventListener("alpine:init", () => {
       if (window.BACKEND === "WebGPU") {
         try {
           device = await getDevice();
+          /*
           device.pushErrorScope("out-of-memory");
           device.pushErrorScope("internal");
           device.pushErrorScope("validation");
+          */
           if (window.TEST) {
             await runTest(window.TEST, this.progress.bind(this), device);
             return;
           }
-          var modelPromise = load_state_dict(device, this.progress.bind(this));
+          //var modelPromise = load_state_dict(device, this.progress.bind(this));
           console.log("WebGPU device initialized");
         } catch (error) {
           this.progress(0, 100, "Failed to launch WebGPU. Loading WASM model instead...");
