@@ -23,7 +23,8 @@ const kernelsReady = (async () => {
 const getDevice = async () => {
   const adapter = await navigator.gpu.requestAdapter();
   const requiredLimits = {};
-  const maxBufferSizeInSDModel = 1073741824;
+  //const maxBufferSizeInSDModel = 1073741824;
+  const maxBufferSizeInSDModel = 322122544;
   requiredLimits.maxStorageBufferBindingSize = maxBufferSizeInSDModel;
   requiredLimits.maxBufferSize = maxBufferSizeInSDModel;
             
