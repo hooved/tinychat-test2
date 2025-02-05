@@ -1,5 +1,5 @@
 window.TINYCHAT_ROOT = "/tinychat-test/";
-window.MODEL_BASE_URL= "https://huggingface.co/datasets/hooved/llama-3-2-1B-f32/resolve/main/test";
+window.MODEL_BASE_URL= "https://huggingface.co/datasets/hooved/llama-3-2-1B-f32/resolve/main/test2";
 const queryParams = new URLSearchParams(window.location.search);
 const normalizedParams = Object.fromEntries([...queryParams].map(([key, value]) => [key.toUpperCase(), value.toUpperCase()]));
 window.BACKEND = (normalizedParams["BACKEND"] === "WASM") ? "WASM" : "WebGPU";
@@ -23,9 +23,7 @@ const kernelsReady = (async () => {
 const getDevice = async () => {
   const adapter = await navigator.gpu.requestAdapter();
   const requiredLimits = {};
-  //const maxBufferSizeInSDModel = 1073741824;
-  //const maxBufferSizeInSDModel = 322122544;
-  const maxBufferSizeInSDModel = 322122545;
+  const maxBufferSizeInSDModel = 1073741824;
   requiredLimits.maxStorageBufferBindingSize = maxBufferSizeInSDModel;
   requiredLimits.maxBufferSize = maxBufferSizeInSDModel;
             
@@ -226,8 +224,6 @@ function sendMessageToWorker(worker, message) {
 
 const load_state_dict = async (device, progress) => {
   let completed = 0;
-  let inProgress = 0;
-  let p2 = 0;
   let totalLoaded = 0;
   let totalSize = 0;
   let partSize = {};
@@ -255,7 +251,7 @@ const load_state_dict = async (device, progress) => {
               for (;;) {
                   const { done, value } = await reader.read();
                   if (done) break;
-                  progressCallback(part, value.byteLength, total, `Downloading model: ${inProgress}/${p2}/${completed}/29`);
+                  progressCallback(part, value.byteLength, total, `Downloading model: ${completed}/29`);
                   controller.enqueue(value);
               }
                     
@@ -280,7 +276,7 @@ const load_state_dict = async (device, progress) => {
       console.log(`Cache hit: ${filename}, hash: ${hash}`);
       totalLoaded += part.content.byteLength;
       totalSize += part.content.byteLength;
-      progress(totalLoaded, totalSize,`Downloading model: ${inProgress}/${p2}/${completed}/29`)
+      progress(totalLoaded, totalSize, `Downloading model: ${completed}/29`)
       return Promise.resolve(part.content);
     } else {
       console.log(`Cache miss: ${filename}, hash: ${hash}`);
@@ -338,124 +334,16 @@ const load_state_dict = async (device, progress) => {
   await kernelsReady;
   // instantiates empty weight buffers on WebGPU, attaches buffers to state_dict
   const model = await transformer().setup(device, state_dict, progress);
-
-
-  if (window.BACKEND === "WebGPU") {
-    delete state_dict["output.weight"]; // uses same data as tok_embeddings.weight, TODO: make consistent with wasm loading
-    const num_decompressers = 1;
-    // decompression time goes from 15sec to 10sec by scheduling GPU jobs like below, with Q6_K quantized llama-3.2-1B
-    // TODO: can we get tinygrad to give us bigger kernels? currently throws exceptions when trying to compile them
-    var pipelinePool = await Promise.all(
-      Array.from({ length: num_decompressers }, () => q6k_to_f32().setup(device)).map(async (promise) => {
-        return {pipeline: await promise, busy: false};
-      })
-    );
-  }
-  else if (window.BACKEND === "WASM") {
-    // current source weights have everything int8 quantized or float32; only output.weight is decompressed from Q6_K. 
-    // we could make this faster with more workers, but only takes 2-3 sec
-    const num_decompressers = 1
-    const workers = Array.from({ length: num_decompressers }, () => new Worker(`./worker.js?version=${Date.now()}`));
-    const promises = workers.map(async (worker) => {
-      await sendMessageToWorker(worker, {header: "setup", data: "decompress"}); // setup flag, worker can only do decompression now
-      return {
-        worker: worker,
-        pipeline: (k_v_pair) => sendMessageToWorker(worker, {header: "k_v", data: k_v_pair}),
-        busy: false
-      };
-    });
-    var pipelinePool = await Promise.all(promises);
-  }
-
-  // Decompresses a tensor (or slice thereof), loading the result to the model's state_dict
-  async function decompressToStateDict(part) {
-    if (part.dtype !== "Q6_K") throw new Error("only Q6_K to float32 decompression is supported by tinychat")
-    if (window.BACKEND === "WebGPU") {
-      const gpuJobs = [];
-      const inChunkSize = 3144960; // max size that tinygrad compiled without exceptions, that is divisible by 210; TODO base it on net.js
-      const byteFactor = 1 / 210 * 256 * 4;
-
-      function scheduleDequantizeJob(slice) {
-        return (async () => {
-          const decompress = await getFreePipeline(pipelinePool);
-          p2 += 2;
-          progress(totalLoaded, totalSize,`Downloading model: ${inProgress}/${p2}/${completed}/29`);
-          const out = await decompress(slice.bytes); // local arraybuffer
-          p2 += 23;
-          progress(totalLoaded, totalSize,`Downloading model: ${inProgress}/${p2}/${completed}/29`);
-          const decompBytes = new Uint8Array(out.buffer);
-          const unpadded = (decompBytes.length === slice.output_size) ? decompBytes : decompBytes.subarray(0, slice.output_size); // in case we padded
-          p2 += 29;
-          //new Uint8Array(state_dict[slice.key].bytes.getMappedRange(slice.target_start_pos, slice.output_size)).set(unpadded);
-          device.queue.writeBuffer(state_dict[slice.key].bytes, slice.target_start_pos, unpadded);
-          p2 += 199;
-          progress(totalLoaded, totalSize,`Downloading model: ${inProgress}/${p2}/${completed}/29`);
-          releasePipeline(decompress, pipelinePool);
-        })();
-      }
-
-      for (let cursor = 0; cursor < part.size; cursor += inChunkSize) {
-        const slice_end_pos = Math.min(cursor + inChunkSize, part.size);
-        const slice = {
-          key: part.key,
-          bytes: part.bytes.slice(cursor, slice_end_pos),
-          output_size: parseInt((slice_end_pos - cursor) * byteFactor), // needed in case we pad
-          target_start_pos: parseInt((part.target_start_pos + cursor) * byteFactor)
-          //target_end_pos: parseInt((part.target_start_pos + slice_end_pos) * byteFactor)
-        }
-        if (slice.bytes.length < inChunkSize) { // decompression kernel requires a constant input shape
-          const padded = new Uint8Array(inChunkSize);
-          padded.set(slice.bytes);
-          slice.bytes = padded;
-        }
-        gpuJobs.push(scheduleDequantizeJob(slice));
-      }
-      await Promise.all(gpuJobs);
-    } 
-    else if (window.BACKEND === "WASM") {
-      // TODO: this is probably broken with webgpu refactor, fix
-      state_dict["output.weight"] = state_dict["tok_embeddings.weight"]; // buffer is the same; clang export code prioritized output.weight
-      delete state_dict["tok_embeddings.weight"];
-
-      function scheduleDequantizeJob(k, v) {
-        // k, v are from the model's state_dict
-        return (async () => {
-          const pipeline = await getFreePipeline(pipelinePool);
-          const new_v = await pipeline([k, v]);
-          if (k.includes("feed_forward") || k.includes("attention.w")) {
-            state_dict[k.replace("weight", "scale")] = {"dtype": "float32", "bytes": new_v.scale, "size": new_v.scale.length}
-          }
-          state_dict[k] = new_v;
-          releasePipeline(pipeline, pipelinePool);
-        })();
-      }
-
-      const cpuJobs = [];
-      for (const [k, v] of Object.entries(state_dict)) {
-        if (v.dtype === "Q6_K") {cpuJobs.push(scheduleDequantizeJob(k, v));}
-      }
-      await Promise.all(cpuJobs);
-      pipelinePool.forEach(p => p.worker.terminate());
-
-    } else {throw new Error(`window.BACKEND is ${window.BACKEND}, but must be WebGPU or WASM`)}
-
-    //const t1 = performance.now();
-    //console.log(`decompression elapsed seconds: ${(t1 - t0) / 1000}`)
-  }
+  delete state_dict["output.weight"]; // uses same data as tok_embeddings.weight, TODO: make consistent with wasm loading
+  delete state_dict["output.scale"]; // uses same data as tok_embeddings.weight, TODO: make consistent with wasm loading
 
   const valid_final_dtypes = new Set(["float32", "int8", "int32"]);
   const loadFileToStateDict = async(file) => {
     for (const part of file.parts) {
       if (part.empty) continue;
       part.bytes = (part.size === file.bytes.length) ? file.bytes : file.bytes.slice(part.file_start_pos, part.file_start_pos + part.size);
-      if (part.dtype === "Q6_K") await decompressToStateDict(part, state_dict, pipelinePool, device, progress); // TODO: move this function def within this scope
-      else if (valid_final_dtypes.has(part.dtype)) {
-        p2 += 293;
-        progress(totalLoaded, totalSize,`Downloading model: ${inProgress}/${p2}/${completed}/29`);
-        //new Uint8Array(state_dict[part.key].bytes.getMappedRange(part.target_start_pos, part.bytes.length)).set(part.bytes);
-        device.queue.writeBuffer(state_dict[part.key].bytes, part.target_start_pos, part.bytes);
-        p2 += 1000;
-        progress(totalLoaded, totalSize,`Downloading model: ${inProgress}/${p2}/${completed}/29`);
+      if (valid_final_dtypes.has(part.dtype)) {
+        new Uint8Array(state_dict[part.key].bytes.getMappedRange(part.target_start_pos, part.bytes.length)).set(part.bytes);
       }
       else throw new Error(`unexpected dtype: ${part.dtype} in file: ${file.name}`);
       part.bytes = null;
@@ -464,30 +352,23 @@ const load_state_dict = async (device, progress) => {
     completed += 1;
   }
 
-  let waiting = 0;
   while (completed < data.metadata.files.length) {
     // prioritize files from downloaded queue, so we can continue downloading more files
     if (downloaded.length) {
-      inProgress += 1;
-      progress(totalLoaded, totalSize,`Downloading model: ${inProgress}/${p2}/${completed}/29`);
       const file = downloaded.shift();
       await Promise.all(deletionPromises); // maximize available IndexedDB cache; TODO: should we just await this once outside loop?
       saveTensorToDb(db, file.hash, file.bytes); // Promise, which we currently never await
       await loadFileToStateDict(file); // increments completed when done
     }
     else if (!downloaded.length && cachedFiles.length) {
-      inProgress += 1;
-      progress(totalLoaded, totalSize,`Downloading model: ${inProgress}/${p2}/${completed}/29`);
       const file = cachedFiles.shift();
       file.bytes = await getPart(file.name, file.hash); // reads data from IndexedDB
       await loadFileToStateDict(file); // increments completed when done
     }
     await new Promise(resolve => setTimeout(resolve, 200));
-    waiting += 1;
-    if (waiting > 0 && waiting % 25 === 0) progress(totalLoaded, totalSize, `Waiting ${waiting}: ${inProgress}/${completed}/29`);
   }
 
-  //for (const [k,v] of Object.entries(state_dict)) if (!v.empty) v.bytes.unmap();
+  for (const [k,v] of Object.entries(state_dict)) if (!v.empty) v.bytes.unmap();
   return model;
 };
 
@@ -518,23 +399,18 @@ document.addEventListener("alpine:init", () => {
       if (window.BACKEND === "WebGPU") {
         try {
           device = await getDevice();
-          /*
-          device.pushErrorScope("out-of-memory");
-          device.pushErrorScope("internal");
-          device.pushErrorScope("validation");
-          */
-          if (window.TEST) {
-            await runTest(window.TEST, this.progress.bind(this), device);
-            return;
-          }
-          //var modelPromise = load_state_dict(device, this.progress.bind(this));
+          var modelPromise = load_state_dict(device, this.progress.bind(this));
           console.log("WebGPU device initialized");
         } catch (error) {
-          this.progress(0, 100, `Failed to launch WebGPU: ${error}`);
-          throw new Error(`${error}`);
+          this.progress(0, 100, "Failed to launch WebGPU. Loading WASM model instead...");
           window.BACKEND = "WASM";
           console.log(`error: ${error}\nFailed to launch WebGPU. Loading WASM model instead...`); // return;
         }
+      }
+
+      if (window.TEST) {
+        await runTest(window.TEST, this.progress.bind(this), device);
+        return;
       }
 
       try {
@@ -605,8 +481,6 @@ document.addEventListener("alpine:init", () => {
     },
 
     async handleSend() {
-      this.loadingMessage="handleSend";
-      this.progress(100,100,this.loadingMessage);
       const el = document.getElementById("input-form");
       const value = el.value.trim();
       if (!value) return;
@@ -680,18 +554,10 @@ document.addEventListener("alpine:init", () => {
     },
 
     async handleEnter(event) {
-      this.loadingMessage = "handleEnter";
-      this.progress(100,100,this.loadingMessage);
       // if shift is not pressed
       if (!event.shiftKey) {
         event.preventDefault();
-        try{
-          await this.handleSend();
-        } catch (error) {
-          this.loadingMessage = error;
-          this.progress(100,100,this.loadingMessage);
-          throw new Error(error);
-        }
+        await this.handleSend();
       }
     },
 
@@ -715,8 +581,6 @@ document.addEventListener("alpine:init", () => {
     },
 
     async *openaiChatCompletion(messages) {
-      this.loadingMessage="openaiChatCompletion";
-      this.progress(100,100,this.loadingMessage);
       let tokens = [this.tokenizer.bos_id];
       for (const message of messages) {
         tokens = tokens.concat(this.tokenizer.encodeMessage(message.role, message.content));
@@ -736,34 +600,19 @@ document.addEventListener("alpine:init", () => {
       prefillToks = prefillToks.slice(startPos);
 
       for (const tok of prefillToks) {
-        if (window.BACKEND === "WebGPU") {
-          try {
-            this.loadingMessage = `tok = ${tok}`;
-            this.progress(100,100,this.loadingMessage);
-            await this.nets["transformer"](new Int32Array([tok]), new Int32Array([startPos]), this.progress.bind(this));
-          }
-          catch (error) {
-            this.loadingMessage = error;
-            this.progress(100,100,this.loadingMessage);
-            throw new Error(error)
-          }
-        }
+        if (window.BACKEND === "WebGPU") {await this.nets["transformer"](new Int32Array([tok]), new Int32Array([startPos]));}
         else {await this.nets["transformer"](tok, startPos);}
         startPos += 1;
       }
 
       let lastTok = tokens[tokens.length - 1];
       while (true) {
-        if (window.BACKEND === "WebGPU") {
-          this.loadingMessage = `lastTok = ${lastTok}`;
-          this.progress(100,100,this.loadingMessage);
-          var tok = await this.nets["transformer"](new Int32Array([lastTok]), new Int32Array([startPos]), this.progress.bind(this)); tok = tok[0];
-        }
+        if (window.BACKEND === "WebGPU") {var tok = await this.nets["transformer"](new Int32Array([lastTok]), new Int32Array([startPos])); tok = tok[0];}
         else {var tok = await this.nets["transformer"](lastTok, startPos);}
         this.lastSeenToks.push(lastTok); // lets us skip prefilling with these tokens at the next prompt in this chain
         startPos += 1;
         lastTok = tok;
-        if (this.tokenizer.stop_tokens.has(lastTok)) {this.loadingMessage = ""; break;}
+        if (this.tokenizer.stop_tokens.has(lastTok)) break;
         yield new TextDecoder().decode(this.tokenizer.decode([lastTok]));
       }
     },
