@@ -1629,6 +1629,7 @@ commandEncoder.copyBufferToBuffer(gpuWriteBuffer0, 0, input0, 0, gpuWriteBuffer0
     device.queue.writeBuffer(gpuWriteBuffer1, 0, data1);
 commandEncoder.copyBufferToBuffer(gpuWriteBuffer1, 0, input1, 0, gpuWriteBuffer1.size);
 
+/*
             addComputePass(device, commandEncoder, piplines[0], [buf_0, buf_1, input0, buf_2], [16, 64, 1]);
         addComputePass(device, commandEncoder, piplines[1], [buf_3, buf_0], [2048, 1, 1]);
         addComputePass(device, commandEncoder, piplines[2], [buf_4, buf_3], [1, 1, 1]);
@@ -1933,6 +1934,7 @@ commandEncoder.copyBufferToBuffer(gpuWriteBuffer1, 0, input1, 0, gpuWriteBuffer1
         addComputePass(device, commandEncoder, piplines[301], [buf_361, buf_360], [167, 1, 1]);
         addComputePass(device, commandEncoder, piplines[302], [buf_362, buf_4, buf_360, buf_361], [8, 1, 1]);
         addComputePass(device, commandEncoder, piplines[303], [output0, buf_362], [1, 1, 1]);
+        */
         let gpuCommands = commandEncoder.finish();
         device.queue.submit([gpuCommands]);
         
