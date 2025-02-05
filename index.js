@@ -528,7 +528,7 @@ document.addEventListener("alpine:init", () => {
           //var modelPromise = load_state_dict(device, this.progress.bind(this));
           console.log("WebGPU device initialized");
         } catch (error) {
-          this.progress(0, 100, "Failed to launch WebGPU. Loading WASM model instead...");
+          this.progress(0, 100, `Failed to launch WebGPU: ${error}`);
           throw new Error(`${error}`);
           window.BACKEND = "WASM";
           console.log(`error: ${error}\nFailed to launch WebGPU. Loading WASM model instead...`); // return;
