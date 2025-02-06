@@ -4,6 +4,10 @@ const queryParams = new URLSearchParams(window.location.search);
 const normalizedParams = Object.fromEntries([...queryParams].map(([key, value]) => [key.toUpperCase(), value.toUpperCase()]));
 window.BACKEND = (normalizedParams["BACKEND"] === "WASM") ? "WASM" : "WebGPU";
 window.TEST = normalizedParams["TEST"];
+const isMobileAgent = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+const hasMobileScreenDims = window.matchMedia("(max-width: 768px)").matches;
+const hasTouchScreen = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+window.isMobile = isMobileAgent || hasMobileScreenDims || hasTouchScreen;
 
 const tiktokenReady = (async () => {
   const { init, get_encoding, Tiktoken, load } = await import('./tiktoken.js');
@@ -310,8 +314,8 @@ const load_state_dict = async (device, progress) => {
   const cachedFiles = data.metadata.files.filter(file => cachedFileHashes.has(file.hash));
   const toDownload = data.metadata.files.filter(file => !cachedFileHashes.has(file.hash));
   const downloaded = [];
-  // to limit memory overhead, we pause downloads if we have this number of downloaded files waiting to be processed
-  const numDownloaders = 5; // TODO: dynamically base this on DL file size?
+  // to limit memory overhead, on mobile, we pause downloads if we have this number of downloaded files waiting to be processed
+  const numDownloaders = window.isMobile ? 5 : toDownload.length; // TODO: dynamically base this on DL file size? current assumption is 16 MiB chunks
   const chainDownload = async (file) => {
     loadPart(`${window.MODEL_BASE_URL}/${file.name}`, progressCallback) // triggers download
     .then(async (arraybuf) => { 
