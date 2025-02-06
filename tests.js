@@ -86,7 +86,27 @@ async function testTokenizer(progress) {
 async function runTest(test, progress, device) {
   if (test === "GPU_MEMORY") {
     let tot = 0;
+    let allocs = [128, 128, 128, 128, 128, 128, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256];
+    for (const s of allocs) {
+      blockThread(500);
+      await testGPUAllocation(s, device);
+      tot += s;
+      progress(0,100, `${tot} MB allocated to gpu`);
+    }
+    progress(0,100, `${tot} MB allocated to gpu, done allocating`);
+    return;
+  }
+  else if (test === "GPU_MODEL") {
+    let tot = 0;
+    const response = await fetch(`${window.MODEL_BASE_URL}/net_metadata.json`);
+    const data = await response.json();
+    const state_dict = data.metadata.state_dict;
+
+    await kernelsReady;
+    const model = await transformer().setup(device, state_dict, progress);
+    // TODO: make small allocations into transformer buffers instead of below
     let allocs = [128, 256, 512, 1024, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256];
+
     for (const s of allocs) {
       blockThread(500);
       await testGPUAllocation(s, device);
