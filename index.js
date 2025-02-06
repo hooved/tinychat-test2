@@ -5,9 +5,8 @@ const normalizedParams = Object.fromEntries([...queryParams].map(([key, value]) 
 window.BACKEND = (normalizedParams["BACKEND"] === "WASM") ? "WASM" : "WebGPU";
 window.TEST = normalizedParams["TEST"];
 const isMobileAgent = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-const hasMobileScreenDims = window.matchMedia("(max-width: 768px)").matches;
 const hasTouchScreen = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-window.isMobile = isMobileAgent || hasMobileScreenDims || hasTouchScreen;
+window.isMobile = isMobileAgent || hasTouchScreen;
 
 const tiktokenReady = (async () => {
   const { init, get_encoding, Tiktoken, load } = await import('./tiktoken.js');
@@ -364,6 +363,7 @@ const load_state_dict = async (device, progress) => {
     completed += 1;
   }
 
+  const loadDelay = window.isMobile ? 100 : 20 // hoping to improve stability on mobile
   while (completed < data.metadata.files.length) {
     // prioritize files from downloaded queue, so we can continue downloading more files
     if (downloaded.length) {
@@ -378,7 +378,7 @@ const load_state_dict = async (device, progress) => {
       file.bytes = await getPart(file.name, file.hash); // reads data from IndexedDB
       await loadFileToStateDict(file); // increments completed when done
     }
-    await new Promise(resolve => setTimeout(resolve, 20));
+    await new Promise(resolve => setTimeout(resolve, loadDelay));
   }
 
   for (const [k,v] of Object.entries(state_dict)) if (!v.empty) v.bytes.unmap();
