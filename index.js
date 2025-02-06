@@ -1,9 +1,9 @@
 window.TINYCHAT_ROOT = "/tinychat-test2/";
 window.MODEL_BASE_URL= "https://huggingface.co/datasets/hooved/llama-3-2-1B-f32/resolve/main/test3";
+window.TEST = normalizedParams["TEST"];
 const queryParams = new URLSearchParams(window.location.search);
 const normalizedParams = Object.fromEntries([...queryParams].map(([key, value]) => [key.toUpperCase(), value.toUpperCase()]));
 window.BACKEND = (normalizedParams["BACKEND"] === "WASM") ? "WASM" : "WebGPU";
-window.TEST = normalizedParams["TEST"];
 const isMobileAgent = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 const hasTouchScreen = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 window.isMobile = isMobileAgent || hasTouchScreen;
@@ -26,8 +26,7 @@ const kernelsReady = (async () => {
 const getDevice = async () => {
   const adapter = await navigator.gpu.requestAdapter();
   const requiredLimits = {};
-  //const maxBufferSizeInSDModel = 1073741824;
-  const maxBufferSizeInSDModel = 322122544;
+  const maxBufferSizeInSDModel = 1073741824;
   requiredLimits.maxStorageBufferBindingSize = maxBufferSizeInSDModel;
   requiredLimits.maxBufferSize = maxBufferSizeInSDModel;
             
@@ -230,35 +229,20 @@ const load_state_dict = async (device, progress) => {
   let completed = 0;
   let totalLoaded = 0;
   let totalSize = 0;
-  let partSize = {};
-
-  const progressCallback = (part, loaded, total, message) => {
-    totalLoaded += loaded;
-
-    if (!partSize[part]) {
-      totalSize += total;
-      partSize[part] = true;
-    }
-                
-    progress(totalLoaded, totalSize, message);
-  };
 
   // modified from examples/webgpu/stable_diffusion/index.html getProgressDlForPart
-  const loadPart = async (part, progressCallback) => {
+  const loadPart = async (part) => {
       const response = await fetch(part);
-      const contentLength = response.headers.get('content-length');
-      const total = parseInt(contentLength, 10);
-
       const res = new Response(new ReadableStream({
           async start(controller) {
               const reader = response.body.getReader();
               for (;;) {
                   const { done, value } = await reader.read();
                   if (done) break;
-                  progressCallback(part, value.byteLength, total, `Downloading model: ${completed}/29`);
+                  totalLoaded += value.byteLength;
+                  progress(totalLoaded, totalSize, `Downloading model: ${completed}/29`);
                   controller.enqueue(value);
               }
-                    
               controller.close();
           },
       }));
@@ -279,12 +263,11 @@ const load_state_dict = async (device, progress) => {
     if (part) {
       console.log(`Cache hit: ${filename}, hash: ${hash}`);
       totalLoaded += part.content.byteLength;
-      totalSize += part.content.byteLength;
       progress(totalLoaded, totalSize, `Downloading model: ${completed}/29`)
       return Promise.resolve(part.content);
     } else {
       console.log(`Cache miss: ${filename}, hash: ${hash}`);
-      return loadPart(`${window.MODEL_BASE_URL}/${filename}`, progressCallback);
+      return loadPart(`${window.MODEL_BASE_URL}/${filename}`);
     }
   }
 
@@ -301,6 +284,7 @@ const load_state_dict = async (device, progress) => {
     for (const part of v.parts) {
       if (part.empty) state_dict[k].empty = true; // assumes no other parts of this weight exist and are non-empty
       else {
+        totalSize += part.size;
         part.key = k;
         part.dtype = v.dtype;
         if (!data.metadata.files[part.file].parts) data.metadata.files[part.file].parts = [];
@@ -313,17 +297,11 @@ const load_state_dict = async (device, progress) => {
   const cachedFiles = data.metadata.files.filter(file => cachedFileHashes.has(file.hash));
   const toDownload = data.metadata.files.filter(file => !cachedFileHashes.has(file.hash));
   const downloaded = [];
-  // to limit memory overhead, on mobile, we pause downloads if we have this number of downloaded files waiting to be processed
+  // to limit memory overhead, we pause downloads if we have this number of downloaded files waiting to be processed
   const numDownloaders = window.isMobile ? 5 : toDownload.length; // TODO: dynamically base this on DL file size? current assumption is 16 MiB chunks
   const chainDownload = async (file) => {
-    loadPart(`${window.MODEL_BASE_URL}/${file.name}`, progressCallback) // triggers download
+    loadPart(`${window.MODEL_BASE_URL}/${file.name}`) // triggers download
     .then(async (arraybuf) => { 
-      //const pages = Math.ceil(arraybuf.byteLength / 64 / 1024); // WASM requires multiples of 64*1024 for memory
-      //const wasmMemory = new WebAssembly.Memory({initial: pages, maximum: pages});
-      //const bytes = new Uint8Array(wasmMemory.buffer);
-      //bytes.set(new Uint8Array(arraybuf));
-      //const bytes = (new Uint8Array((new WebAssembly.Memory({initial: pages, maximum: pages})).buffer)).set(new Uint8Array(arraybuf));
-      //downloaded.push({ ...file, bytes, bytesToSlice: arraybuf.byteLength });
       downloaded.push({ ...file, bytes: new Uint8Array(arraybuf)});
       // pause downloads if further processing is a bottleneck
       while (toDownload.length && downloaded.length >= numDownloaders) await new Promise(resolve => setTimeout(resolve, 200));
@@ -353,8 +331,7 @@ const load_state_dict = async (device, progress) => {
       if (part.empty) continue;
       part.bytes = (part.size === file.bytes.length) ? file.bytes : file.bytes.slice(part.file_start_pos, part.file_start_pos + part.size);
       if (valid_final_dtypes.has(part.dtype)) {
-        //new Uint8Array(state_dict[part.key].bytes.getMappedRange(part.target_start_pos, part.bytes.length)).set(part.bytes);
-        device.queue.writeBuffer(state_dict[part.key].bytes, part.target_start_pos, part.bytes);
+        device.queue.writeBuffer(state_dict[part.key].bytes, part.target_start_pos, part.bytes); // improves stability over mappedAtCreation writing
       }
       else throw new Error(`unexpected dtype: ${part.dtype} in file: ${file.name}`);
       part.bytes = null;
@@ -368,7 +345,6 @@ const load_state_dict = async (device, progress) => {
     // prioritize files from downloaded queue, so we can continue downloading more files
     if (downloaded.length) {
       const file = downloaded.shift();
-      //file.bytes = file.bytes.slice(0, file.bytesToSlice); // slice out of WASM memory which is a multiple of fixed 64KiB pages
       await Promise.all(deletionPromises); // maximize available IndexedDB cache; TODO: should we just await this once outside loop?
       saveTensorToDb(db, file.hash, file.bytes); // Promise, which we currently never await
       await loadFileToStateDict(file); // increments completed when done
@@ -381,7 +357,6 @@ const load_state_dict = async (device, progress) => {
     await new Promise(resolve => setTimeout(resolve, loadDelay));
   }
 
-  for (const [k,v] of Object.entries(state_dict)) if (!v.empty) v.bytes.unmap();
   return model;
 };
 
@@ -418,11 +393,11 @@ document.addEventListener("alpine:init", () => {
             return;
           }
 
-          var model = await load_state_dict(device, this.progress.bind(this));
+          var modelPromise = load_state_dict(device, this.progress.bind(this));
           console.log("WebGPU device initialized");
         } catch (error) {
           this.progress(0, 100, `E: ${error}`);
-          throw new Error(error); // to make tests block
+          throw new Error(error);
           window.BACKEND = "WASM";
           console.log(`error: ${error}\nFailed to launch WebGPU. Loading WASM model instead...`); // return;
         }
@@ -453,7 +428,7 @@ document.addEventListener("alpine:init", () => {
         //await kernelsReady;
         if (window.BACKEND === "WebGPU") {
           //const model = await transformer().setup(device, state_dict, this.progress.bind(this));
-          //const model = await modelPromise;
+          const model = await modelPromise;
           this.nets = {"transformer": model};
         }
         else if (window.BACKEND === "WASM") {
