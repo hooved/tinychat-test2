@@ -79,7 +79,7 @@ async function testTokenizer(progress) {
     tokenizer = await createTokenizer(`${window.MODEL_BASE_URL}/llama3-2.tiktoken`);
     const tokenizer_works = (new TextDecoder().decode(tokenizer.decode(tokenizer.encode("hello world"))) === "hello world");
     console.log("tokenizer works:", tokenizer_works)
-    p = 30; progress(p, 100, "Loading tokenizer:");
+    p = 30; progress(p, 100, `Tokenizer validated: ${tokenizer_works}`);
   } catch (error) {progress(p, 100, `Error launching tokenizer: ${error}`); console.log(error); return;}
 }
 
