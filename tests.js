@@ -195,4 +195,12 @@ async function runTest(test, progress, device) {
     }
     return;
   }
+  else if (test === "IS_MOBILE") {
+    const a = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const b = window.matchMedia("(max-width: 768px)").matches;
+    const c = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    const isMobile = a || b || c;
+    progress(0,100, `${a} ${b} ${c}: ${isMobile}`);
+    return;
+  }
 }
