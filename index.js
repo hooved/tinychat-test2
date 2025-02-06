@@ -393,7 +393,7 @@ document.addEventListener("alpine:init", () => {
             return;
           }
 
-          var modelPromise = load_state_dict(device, this.progress.bind(this));
+          var model = await load_state_dict(device, this.progress.bind(this));
           console.log("WebGPU device initialized");
         } catch (error) {
           this.progress(0, 100, `E: ${error}`);
@@ -427,8 +427,6 @@ document.addEventListener("alpine:init", () => {
         p = 40; this.progress(p, 100, `Launching ${window.BACKEND} model:`);
         //await kernelsReady;
         if (window.BACKEND === "WebGPU") {
-          //const model = await transformer().setup(device, state_dict, this.progress.bind(this));
-          const model = await modelPromise;
           this.nets = {"transformer": model};
         }
         else if (window.BACKEND === "WASM") {
