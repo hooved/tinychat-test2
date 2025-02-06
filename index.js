@@ -311,7 +311,7 @@ const load_state_dict = async (device, progress) => {
   const toDownload = data.metadata.files.filter(file => !cachedFileHashes.has(file.hash));
   const downloaded = [];
   // to limit memory overhead, we pause downloads if we have this number of downloaded files waiting to be processed
-  const numDownloaders = 5; // TODO: dynamically base this on DL file size?
+  const numDownloaders = 30; // TODO: dynamically base this on DL file size?
   const chainDownload = async (file) => {
     loadPart(`${window.MODEL_BASE_URL}/${file.name}`, progressCallback) // triggers download
     .then(async (arraybuf) => { 
@@ -367,7 +367,7 @@ const load_state_dict = async (device, progress) => {
       file.bytes = await getPart(file.name, file.hash); // reads data from IndexedDB
       await loadFileToStateDict(file); // increments completed when done
     }
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await new Promise(resolve => setTimeout(resolve, 20));
   }
 
   for (const [k,v] of Object.entries(state_dict)) if (!v.empty) v.bytes.unmap();
