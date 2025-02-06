@@ -400,6 +400,12 @@ document.addEventListener("alpine:init", () => {
       if (window.BACKEND === "WebGPU") {
         try {
           device = await getDevice();
+
+          if (window.TEST) {
+            await runTest(window.TEST, this.progress.bind(this), device);
+            return;
+          }
+
           var modelPromise = load_state_dict(device, this.progress.bind(this));
           console.log("WebGPU device initialized");
         } catch (error) {
@@ -407,11 +413,6 @@ document.addEventListener("alpine:init", () => {
           window.BACKEND = "WASM";
           console.log(`error: ${error}\nFailed to launch WebGPU. Loading WASM model instead...`); // return;
         }
-      }
-
-      if (window.TEST) {
-        await runTest(window.TEST, this.progress.bind(this), device);
-        return;
       }
 
       try {
@@ -778,8 +779,7 @@ function hasBom(buffer) {
   return BOM.every((charCode, index) => buffer.charCodeAt(index) === charCode);
 }
 
-//const PAT_STR = "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\r\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+";
-const PAT_STR = "(?:'s|'t|'re|'ve|'m|'ll|'d)|[^\r\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+";
+const PAT_STR = "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\r\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+";
 
 async function createTokenizer(bpeUrl) {
   const num_base_tokens = 128000;

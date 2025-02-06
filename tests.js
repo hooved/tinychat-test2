@@ -65,6 +65,24 @@ async function testGPUAllocation(size, device) {
     }
 }
 
+async function testTokenizer(progress) {
+  var p = 0;
+  try {
+    progress(p, 100, "Loading tokenizer:");
+    const wasmResponse = await fetch(`${window.MODEL_BASE_URL}/tiktoken_bg.wasm`);
+    p = 10; progress(p, 100, "Loading tokenizer:");
+    const wasmBytes = await wasmResponse.arrayBuffer();
+    await tiktokenReady;
+    await window.tiktokenInit((imports) => WebAssembly.instantiate(wasmBytes, imports));
+    p = 20; progress(p, 100, "Loading tokenizer:");
+
+    tokenizer = await createTokenizer(`${window.MODEL_BASE_URL}/llama3-2.tiktoken`);
+    const tokenizer_works = (new TextDecoder().decode(tokenizer.decode(tokenizer.encode("hello world"))) === "hello world");
+    console.log("tokenizer works:", tokenizer_works)
+    p = 30; progress(p, 100, "Loading tokenizer:");
+  } catch (error) {progress(p, 100, `Error launching tokenizer: ${error}`); console.log(error); return;}
+}
+
 async function runTest(test, progress, device) {
   if (test === "GPU_MEMORY") {
     let tot = 0;
@@ -120,6 +138,10 @@ async function runTest(test, progress, device) {
       blockThread(1000);
     }
     progress(0,100, `${size * bufs.length} MB allocated in browser, done allocating`);
+    return;
+  }
+  else if (test === "TOK") {
+    await testTokenizer(progress);
     return;
   }
 }
