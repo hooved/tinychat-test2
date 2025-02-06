@@ -124,13 +124,13 @@ async function runTest(test, progress, device) {
   else if (test === "BROWSER_MEMORY") {
     const num_allocs = 1000;
     const bufs = [];
-    const size = 8;
+    const size = 47;
     const sizeBytes = size * 1024 * 1024;
     for (let i = 0; i < num_allocs; i++) {
       const buffer = new Uint8Array(sizeBytes);
-      buffer.fill(255);
+      buffer.fill(1);
       bufs.push(buffer);
-      progress(0,100, `${size * bufs.length} MB allocated in browser`);
+      progress(0,100, `${size * bufs.length} MiB allocated in browser`);
       await new Promise(resolve => setTimeout(resolve, 0));
       blockThread(200);
     }
