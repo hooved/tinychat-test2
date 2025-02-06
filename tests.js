@@ -104,6 +104,7 @@ async function runTest(test, progress, device) {
     return;
   }
   else if (test === "TOUCH_MODEL") {
+    // TODO update buffer flags, doesn't work atm
     let tot = 0;
     const response = await fetch(`${window.MODEL_BASE_URL}/net_metadata.json`);
     const data = await response.json();
@@ -166,6 +167,21 @@ async function runTest(test, progress, device) {
   }
   else if (test === "TOK") {
     await testTokenizer(progress);
+    return;
+  }
+  else if (test === "WASM_MEMORY") {
+    const memories = [];
+    let tot = 0;
+    for (let i=0; i<149; i++) {// 7003 MiB
+      const mem = new WebAssembly.Memory({initial: 752, maximum: 752}); // 47 MiB
+      const buf = new Uint8Array(mem.buffer);
+      buf.fill(1);
+      memories.push(buf);
+      tot += 47;
+      progress(0,100, `${tot} MiB WebAssembly.Memory`);
+      await new Promise(resolve => setTimeout(resolve, 0));
+      blockThread(200);
+    }
     return;
   }
 }
