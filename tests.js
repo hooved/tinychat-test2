@@ -71,21 +71,20 @@ async function testGPUAllocation(size, device) {
 }
 
 async function testTokenizer(progress) {
-  var p = 0;
   try {
-    progress(p, 100, "Loading tokenizer:");
+    progress(progress.total*0.1, "Loading tokenizer:");
     const wasmResponse = await fetch(`${window.MODEL_BASE_URL}/tiktoken_bg.wasm`);
-    p = 10; progress(p, 100, "Loading tokenizer:");
+    progress(progress.total*0.1, "Loading tokenizer:");
     const wasmBytes = await wasmResponse.arrayBuffer();
     await tiktokenReady;
     await window.tiktokenInit((imports) => WebAssembly.instantiate(wasmBytes, imports));
-    p = 20; progress(p, 100, "Loading tokenizer:");
+    progress(progress.total*0.1, "Loading tokenizer:");
 
     tokenizer = await createTokenizer(`${window.MODEL_BASE_URL}/llama3-2.tiktoken`);
     const tokenizer_works = (new TextDecoder().decode(tokenizer.decode(tokenizer.encode("hello world"))) === "hello world");
     console.log("tokenizer works:", tokenizer_works)
-    p = 30; progress(p, 100, `Tokenizer validated: ${tokenizer_works}`);
-  } catch (error) {progress(p, 100, `Error launching tokenizer: ${error}`); console.log(error); return;}
+    progress(progress.total*0.1, `Tokenizer validated: ${tokenizer_works}`);
+  } catch (error) {progress(-1, `Error launching tokenizer: ${error}`); console.log(error); return;}
 }
 
 async function runTest(test, progress, device) {
@@ -98,9 +97,9 @@ async function runTest(test, progress, device) {
       const buf = await testGPUAllocation(s, device);
       bufs.push(buf)
       tot += s;
-      progress(0,100, `${tot} MB allocated to gpu`);
+      progress(-1, `${tot} MB allocated to gpu`);
     }
-    progress(0,100, `${tot} MB allocated to gpu, done allocating`);
+    progress(-1, `${tot} MB allocated to gpu, done allocating`);
     return;
   }
   else if (test === "TOUCH_MODEL") {
@@ -115,10 +114,10 @@ async function runTest(test, progress, device) {
       if (v.bytes) {
         await testBufferAllocation(device, null, v.bytes);
         tot += v.bytes.size;
-        progress(0,100, `${tot} allocated to gpu`);
+        progress(-1, `${tot} allocated to gpu`);
       }
     }
-    progress(0,100, `${tot} allocated to gpu, done allocating`);
+    progress(-1, `${tot} allocated to gpu, done allocating`);
     return;
   }
   else if (test === "BROWSER_MEMORY") {
@@ -130,11 +129,11 @@ async function runTest(test, progress, device) {
       const buffer = new Uint8Array(sizeBytes);
       buffer.fill(1);
       bufs.push(buffer);
-      progress(0,100, `${size * bufs.length} MiB allocated in browser`);
+      progress(-1, `${size * bufs.length} MiB allocated in browser`);
       await new Promise(resolve => setTimeout(resolve, 0));
       blockThread(200);
     }
-    progress(0,100, `${size * bufs.length} MB allocated in browser, done allocating`);
+    progress(-1, `${size * bufs.length} MB allocated in browser, done allocating`);
     return;
   }
   else if (test === "MAXBUF") {
@@ -143,7 +142,7 @@ async function runTest(test, progress, device) {
       const sizeBytes = size * 1024 * 1024;
       const buffer = new Uint8Array(sizeBytes);
       buffer.fill(255);
-      progress(0,100, `${size} MB buffer allocated`);
+      progress(-1, `${size} MB buffer allocated`);
       await new Promise(resolve => setTimeout(resolve, 0));
       blockThread(300);
     }
@@ -158,11 +157,11 @@ async function runTest(test, progress, device) {
       const buffer = new Uint8Array(sizeBytes);
       buffer.fill(255);
       bufs.push(buffer);
-      progress(0,100, `${bufs.length} x ${size}MB bufs allocated`);
+      progress(-1, `${bufs.length} x ${size}MB bufs allocated`);
       await new Promise(resolve => setTimeout(resolve, 0));
       blockThread(1000);
     }
-    progress(0,100, `${size * bufs.length} MB allocated in browser, done allocating`);
+    progress(-1, `${size * bufs.length} MB allocated in browser, done allocating`);
     return;
   }
   else if (test === "TOK") {
@@ -178,7 +177,7 @@ async function runTest(test, progress, device) {
       buf.fill(1);
       memories.push(buf);
       tot += 47;
-      progress(0,100, `${tot} MiB WebAssembly.Memory`);
+      progress(-1, `${tot} MiB WebAssembly.Memory`);
       await new Promise(resolve => setTimeout(resolve, 0));
       blockThread(200);
     }
@@ -189,7 +188,7 @@ async function runTest(test, progress, device) {
       const mem = new WebAssembly.Memory({initial: i * 1024, maximum: i * 1024}); // 47 MiB
       const buf = new Uint8Array(mem.buffer);
       buf.fill(1);
-      progress(0,100, `${i * 64} MiB WebAssembly.Memory`);
+      progress(-1, `${i * 64} MiB WebAssembly.Memory`);
       await new Promise(resolve => setTimeout(resolve, 0));
       blockThread(400);
     }
@@ -200,7 +199,7 @@ async function runTest(test, progress, device) {
     const b = window.matchMedia("(max-width: 768px)").matches;
     const c = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     const isMobile = a || b || c;
-    progress(0,100, `${a} ${b} ${c}: ${isMobile}`);
+    progress(-1, `${a} ${b} ${c}: ${isMobile}`);
     return;
   }
 }

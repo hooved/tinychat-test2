@@ -2,11 +2,11 @@ window.TINYCHAT_ROOT = "/tinychat-test2/";
 window.MODEL_BASE_URL= "https://huggingface.co/datasets/hooved/llama-3-2-1B-f32/resolve/main/test3";
 const queryParams = new URLSearchParams(window.location.search);
 const normalizedParams = Object.fromEntries([...queryParams].map(([key, value]) => [key.toUpperCase(), value.toUpperCase()]));
-window.TEST = normalizedParams["TEST"];
 window.BACKEND = (normalizedParams["BACKEND"] === "WASM") ? "WASM" : "WebGPU";
 const isMobileAgent = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 const hasTouchScreen = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 window.isMobile = isMobileAgent || hasTouchScreen;
+window.TEST = normalizedParams["TEST"];
 
 const tiktokenReady = (async () => {
   const { init, get_encoding, Tiktoken, load } = await import('./tiktoken.js');
@@ -26,7 +26,7 @@ const kernelsReady = (async () => {
 const getDevice = async () => {
   const adapter = await navigator.gpu.requestAdapter();
   const requiredLimits = {};
-  const maxBufferSizeInSDModel = 322122544;
+  const maxBufferSizeInSDModel = 1073741824;
   requiredLimits.maxStorageBufferBindingSize = maxBufferSizeInSDModel;
   requiredLimits.maxBufferSize = maxBufferSizeInSDModel;
             
@@ -177,25 +177,22 @@ function deleteTensorFromDb(db, id) {
   });
 }
 
-async function hashBuffer(bytes) {
-  const hash = await crypto.subtle.digest("SHA-256", bytes);
-  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-async function getFreePipeline(pipelinePool) {
-  for (;;) {
-    const idx = pipelinePool.findIndex(obj => !obj.busy);
-    if (idx >= 0) {
-      pipelinePool[idx].busy = true;
-      return pipelinePool[idx].pipeline;
+function makeProgress(total) {
+  let acc = 0;
+  const ret = function progress(amount, message) {
+    if (amount >= 0) { // allow updating message only
+      acc += amount;
+      const percentage = total ? Math.trunc((acc / total) * 100) : 0;
+      document.querySelector('.progress').style.width = `${percentage}%`;
+      document.getElementById('progress-percentage').textContent = `${percentage}%`;
     }
-    await new Promise(r => setTimeout(r, 5));
-  }
-}
-
-function releasePipeline(pipeline, pipelinePool) {
-  const obj = pipelinePool.find(obj => obj.pipeline === pipeline);
-  if (obj) obj.busy = false;
+    if (message) {
+      this.loadingMessage = message;
+      document.getElementById('loading-message').textContent = this.loadingMessage;
+    }
+  }.bind(this);
+  ret.total = total;
+  return ret;
 }
 
 function sendMessageToWorker(worker, message) {
@@ -216,19 +213,14 @@ function sendMessageToWorker(worker, message) {
     worker.addEventListener('error', onError);
 
     if (message.header === "token") {worker.postMessage(message.data);}
-    else if (message.header === "setup") {worker.postMessage(message.data);}
-    // if message.data is a [k, v] from Object.entries(state_dict)
-    else if (message.header === "k_v") {worker.postMessage(message.data, [message.data[1].bytes.buffer]);}
-    // if message.data is the decompressed state_dict
+    // if message.data is the state_dict
     else if (message.header === "state_dict") {worker.postMessage(message.data, Object.values(message.data).flatMap(({ bytes }) => bytes ? [bytes.buffer] : []));}
   });
 }
 
-
-const load_state_dict = async (device, progress) => {
+async function load_state_dict (data, device, progress) {
+  const state_dict = data.metadata.state_dict;
   let completed = 0;
-  let totalLoaded = 0;
-  let totalSize = 0;
 
   // modified from examples/webgpu/stable_diffusion/index.html getProgressDlForPart
   const loadPart = async (part) => {
@@ -239,8 +231,7 @@ const load_state_dict = async (device, progress) => {
               for (;;) {
                   const { done, value } = await reader.read();
                   if (done) break;
-                  totalLoaded += value.byteLength;
-                  progress(totalLoaded, totalSize, `Downloading model: ${completed}/29`);
+                  progress(value.byteLength, `Loading model:`);
                   controller.enqueue(value);
               }
               controller.close();
@@ -250,11 +241,6 @@ const load_state_dict = async (device, progress) => {
       return res.arrayBuffer();
   };
 
-  const response = await fetch(`${window.MODEL_BASE_URL}/net_metadata.json`);
-  // TODO: cache metadata (and everything else) so tinychat works offline
-  const data = await response.json();
-  const state_dict = data.metadata.state_dict;
-
   let db = await initDb();
 
   const getPart = async(filename, hash) => {
@@ -262,8 +248,7 @@ const load_state_dict = async (device, progress) => {
 
     if (part) {
       console.log(`Cache hit: ${filename}, hash: ${hash}`);
-      totalLoaded += part.content.byteLength;
-      progress(totalLoaded, totalSize, `Downloading model: ${completed}/29`)
+      progress(part.content.byteLength, `Loading model:`)
       return Promise.resolve(part.content);
     } else {
       console.log(`Cache miss: ${filename}, hash: ${hash}`);
@@ -280,19 +265,6 @@ const load_state_dict = async (device, progress) => {
   const deletionPromises = notInCorrectHashes.map(async (hash) => deleteTensorFromDb(db, hash));
   //for (const hash of notInCorrectHashes) {deleteTensorFromDb(db, hash);}
 
-  for (const [k,v] of Object.entries(state_dict)) {
-    for (const part of v.parts) {
-      if (part.empty) state_dict[k].empty = true; // assumes no other parts of this weight exist and are non-empty
-      else {
-        totalSize += part.size;
-        part.key = k;
-        part.dtype = v.dtype;
-        if (!data.metadata.files[part.file].parts) data.metadata.files[part.file].parts = [];
-        data.metadata.files[part.file].parts.push(part);
-      }
-    }
-  }
-
   const cachedFileHashes = new Set(dbKeys.filter(key => correctHashesSet.has(key)));
   const cachedFiles = data.metadata.files.filter(file => cachedFileHashes.has(file.hash));
   const toDownload = data.metadata.files.filter(file => !cachedFileHashes.has(file.hash));
@@ -308,15 +280,6 @@ const load_state_dict = async (device, progress) => {
       if (toDownload.length && downloaded.length < numDownloaders) chainDownload(toDownload.shift()); // start next download
     })
   }
-  /*
-  let totalLoaded = 0;
-  let totalSize = Object.values(state_dict).filter(item => item.dtype === "Q6_K").reduce((sum, item) => sum + item.size, 0);
-  const numCheckpoints = 90;
-  let nextCheckpoint = totalSize / numCheckpoints;
-  const decompProgressFraction = 0.90;
-  totalSize = totalSize / decompProgressFraction; // extend progress bar for minor steps after decompression
-  const t0 = performance.now();
-  */
   for (let i=0; i<numDownloaders; i++) if (toDownload.length) chainDownload(toDownload.shift());
 
   await kernelsReady;
@@ -372,60 +335,66 @@ document.addEventListener("alpine:init", () => {
     max_context: 1024,
     lastSeenToks: [],
 
-    progress(loaded, total, message) {
-      const percentage = total ? Math.trunc((loaded / total) * 100) : 0;
-      document.querySelector('.progress').style.width = `${percentage}%`;
-      document.getElementById('progress-percentage').textContent = `${percentage}%`;
-      if (message) {
-        this.loadingMessage = message;
-        document.getElementById('loading-message').textContent = this.loadingMessage;
-      }
-    },
+    progress: null,
 
     async init() {
+      const response = await fetch(`${window.MODEL_BASE_URL}/net_metadata.json`);
+      // TODO: cache metadata (and everything else) so tinychat works offline
+      const data = await response.json();
+      const state_dict = data.metadata.state_dict;
+      let totalSize = 0;
+      for (const [k,v] of Object.entries(state_dict)) {
+        for (const part of v.parts) {
+          if (part.empty) state_dict[k].empty = true; // assumes no other parts of this weight exist and are non-empty
+          else {
+            totalSize += part.size;
+            part.key = k;
+            part.dtype = v.dtype;
+            if (!data.metadata.files[part.file].parts) data.metadata.files[part.file].parts = [];
+            data.metadata.files[part.file].parts.push(part);
+          }
+        }
+      }
+      totalSize = totalSize / 0.8; // give space in progress bar for initializing model bufs, and tokenizer
+      this.progress = makeProgress.call(this, totalSize); // creates closure with totalSize
+
       var device = null;
       if (window.BACKEND === "WebGPU") {
         try {
           device = await getDevice();
+          console.log("WebGPU device initialized");
 
           if (window.TEST) {
-            await runTest(window.TEST, this.progress.bind(this), device);
+            await runTest(window.TEST, this.progress, device);
             return;
           }
 
-          var model = await load_state_dict(device, this.progress.bind(this));
-          console.log("WebGPU device initialized");
+          var model = await load_state_dict(data, device, this.progress);
         } catch (error) {
-          this.progress(0, 100, `E: ${error}`);
+          this.progress(-1, `E: ${error}`)
           throw new Error(error);
+          this.progress(0, "Failed to launch WebGPU. Loading WASM model instead...");
           window.BACKEND = "WASM";
           console.log(`error: ${error}\nFailed to launch WebGPU. Loading WASM model instead...`); // return;
         }
       }
 
       try {
-        const placeholder = 1; // TODO: clean up this section, handle WASM
-      } catch (error) {this.progress(0, 100, `Error decompressing model: ${error}`); console.log(error); return;}
-
-      var p = 0;
-      try {
-        this.progress(p, 100, "Loading tokenizer:");
+        this.progress(0.01 * totalSize, "Loading tokenizer:");
         const wasmResponse = await fetch(`${window.MODEL_BASE_URL}/tiktoken_bg.wasm`);
-        p = 10; this.progress(p, 100, "Loading tokenizer:");
+        this.progress(0.01 * totalSize, "Loading tokenizer:");
         const wasmBytes = await wasmResponse.arrayBuffer();
         await tiktokenReady;
         await window.tiktokenInit((imports) => WebAssembly.instantiate(wasmBytes, imports));
-        p = 20; this.progress(p, 100, "Loading tokenizer:");
+        this.progress(0.01 * totalSize, "Loading tokenizer:");
 
         this.tokenizer = await createTokenizer(`${window.MODEL_BASE_URL}/llama3-2.tiktoken`);
         const tokenizer_works = (new TextDecoder().decode(this.tokenizer.decode(this.tokenizer.encode("hello world"))) === "hello world");
         console.log("tokenizer works:", tokenizer_works)
-        p = 30; this.progress(p, 100, "Loading tokenizer:");
-      } catch (error) {this.progress(p, 100, `Error launching tokenizer: ${error}`); console.log(error); return;}
+        this.progress(0.01 * totalSize, "Loading tokenizer:");
+      } catch (error) {this.progress(-1, `Error launching tokenizer: ${error}`); console.log(error); return;}
 
       try {
-        p = 40; this.progress(p, 100, `Launching ${window.BACKEND} model:`);
-        //await kernelsReady;
         if (window.BACKEND === "WebGPU") {
           this.nets = {"transformer": model};
         }
@@ -435,9 +404,9 @@ document.addEventListener("alpine:init", () => {
           msg = await sendMessageToWorker(modelWorker, {header: "state_dict", data: state_dict});
           this.nets = {"transformer": async (tok, start_pos) => sendMessageToWorker(modelWorker, {header: "token", data: [tok, start_pos]})};
         }
-        this.progress(100, 100, `Launching ${window.BACKEND} model:`);
+        this.progress(0.01 * totalSize, `Launching ${window.BACKEND} model:`);
         this.loadingMessage = ""; // Triggers removal of loading bar, display of prompt box
-      } catch (error) {this.progress(p, 100, `Error launching model: ${error}`); console.log(error); return;}
+      } catch (error) {this.progress(-1, `Error launching model: ${error}`); console.log(error); return;}
     },
 
     // current state
