@@ -184,4 +184,15 @@ async function runTest(test, progress, device) {
     }
     return;
   }
+  else if (test === "WASM_SIZE") {
+    for (let i=1; i<110; i++) {// 7040 MiB
+      const mem = new WebAssembly.Memory({initial: i * 1024, maximum: i * 1024}); // 47 MiB
+      const buf = new Uint8Array(mem.buffer);
+      buf.fill(1);
+      progress(0,100, `${i * 64} MiB WebAssembly.Memory`);
+      await new Promise(resolve => setTimeout(resolve, 0));
+      blockThread(400);
+    }
+    return;
+  }
 }
