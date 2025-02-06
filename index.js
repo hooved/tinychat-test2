@@ -311,17 +311,17 @@ const load_state_dict = async (device, progress) => {
   const toDownload = data.metadata.files.filter(file => !cachedFileHashes.has(file.hash));
   const downloaded = [];
   // to limit memory overhead, we pause downloads if we have this number of downloaded files waiting to be processed
-  const numDownloaders = 30; // TODO: dynamically base this on DL file size?
+  const numDownloaders = 10; // TODO: dynamically base this on DL file size?
   const chainDownload = async (file) => {
     loadPart(`${window.MODEL_BASE_URL}/${file.name}`, progressCallback) // triggers download
     .then(async (arraybuf) => { 
-      const pages = Math.ceil(arraybuf.byteLength / 64 / 1024); // WASM requires multiples of 64*1024 for memory
-      const wasmMemory = new WebAssembly.Memory({initial: pages, maximum: pages});
-      const bytes = new Uint8Array(wasmMemory.buffer);
-      bytes.set(new Uint8Array(arraybuf));
+      //const pages = Math.ceil(arraybuf.byteLength / 64 / 1024); // WASM requires multiples of 64*1024 for memory
+      //const wasmMemory = new WebAssembly.Memory({initial: pages, maximum: pages});
+      //const bytes = new Uint8Array(wasmMemory.buffer);
+      //bytes.set(new Uint8Array(arraybuf));
       //const bytes = (new Uint8Array((new WebAssembly.Memory({initial: pages, maximum: pages})).buffer)).set(new Uint8Array(arraybuf));
-      //downloaded.push({ ...file, bytes: new Uint8Array(arraybuf)});
-      downloaded.push({ ...file, bytes, bytesToSlice: arraybuf.byteLength });
+      //downloaded.push({ ...file, bytes, bytesToSlice: arraybuf.byteLength });
+      downloaded.push({ ...file, bytes: new Uint8Array(arraybuf)});
       // pause downloads if further processing is a bottleneck
       while (toDownload.length && downloaded.length >= numDownloaders) await new Promise(resolve => setTimeout(resolve, 200));
       if (toDownload.length && downloaded.length < numDownloaders) chainDownload(toDownload.shift()); // start next download
@@ -364,7 +364,7 @@ const load_state_dict = async (device, progress) => {
     // prioritize files from downloaded queue, so we can continue downloading more files
     if (downloaded.length) {
       const file = downloaded.shift();
-      file.bytes = file.bytes.slice(0, file.bytesToSlice); // slice out of WASM memory which is a multiple of fixed 64KiB pages
+      //file.bytes = file.bytes.slice(0, file.bytesToSlice); // slice out of WASM memory which is a multiple of fixed 64KiB pages
       await Promise.all(deletionPromises); // maximize available IndexedDB cache; TODO: should we just await this once outside loop?
       saveTensorToDb(db, file.hash, file.bytes); // Promise, which we currently never await
       await loadFileToStateDict(file); // increments completed when done
