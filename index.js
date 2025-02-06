@@ -406,10 +406,11 @@ document.addEventListener("alpine:init", () => {
             return;
           }
 
-          var modelPromise = load_state_dict(device, this.progress.bind(this));
+          var model = await load_state_dict(device, this.progress.bind(this));
           console.log("WebGPU device initialized");
         } catch (error) {
-          this.progress(0, 100, "Failed to launch WebGPU. Loading WASM model instead...");
+          this.progress(0, 100, `E: ${error}`);
+          throw new Error(error); // to make tests block
           window.BACKEND = "WASM";
           console.log(`error: ${error}\nFailed to launch WebGPU. Loading WASM model instead...`); // return;
         }
@@ -440,7 +441,7 @@ document.addEventListener("alpine:init", () => {
         //await kernelsReady;
         if (window.BACKEND === "WebGPU") {
           //const model = await transformer().setup(device, state_dict, this.progress.bind(this));
-          const model = await modelPromise;
+          //const model = await modelPromise;
           this.nets = {"transformer": model};
         }
         else if (window.BACKEND === "WASM") {
