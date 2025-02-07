@@ -304,11 +304,11 @@ async function load_state_dict (data, device, progress) {
   }
 
   const loadDelay = window.isMobile ? 100 : 20 // hoping to improve stability on mobile
+  await Promise.all(deletionPromises);
   while (completed < data.metadata.files.length) {
     // prioritize files from downloaded queue, so we can continue downloading more files
     if (downloaded.length) {
       const file = downloaded.shift();
-      await Promise.all(deletionPromises); // maximize available IndexedDB cache; TODO: should we just await this once outside loop?
       if (isMobile) await saveTensorToDb(db, file.hash, file.bytes); // might improve stability
       else saveTensorToDb(db, file.hash, file.bytes);
       await loadFileToStateDict(file); // increments completed when done
