@@ -309,7 +309,8 @@ async function load_state_dict (data, device, progress) {
     if (downloaded.length) {
       const file = downloaded.shift();
       await Promise.all(deletionPromises); // maximize available IndexedDB cache; TODO: should we just await this once outside loop?
-      saveTensorToDb(db, file.hash, file.bytes); // Promise, which we currently never await
+      if (isMobile) await saveTensorToDb(db, file.hash, file.bytes); // might improve stability
+      else saveTensorToDb(db, file.hash, file.bytes);
       await loadFileToStateDict(file); // increments completed when done
     }
     else if (!downloaded.length && cachedFiles.length) {
