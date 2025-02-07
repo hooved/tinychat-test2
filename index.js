@@ -6,6 +6,7 @@ window.BACKEND = (normalizedParams["BACKEND"] === "WASM") ? "WASM" : "WebGPU";
 const isMobileAgent = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 const hasTouchScreen = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 window.isMobile = isMobileAgent || hasTouchScreen;
+if (window.isMobile) document.documentElement.classList.add('mobile'); // prevent annoying auto-zoom when entering prompt on mobile
 window.TEST = normalizedParams["TEST"];
 
 const tiktokenReady = (async () => {
