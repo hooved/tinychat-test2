@@ -3,6 +3,7 @@ const kernelsReady = (async () => {
   const exports = await import(`./net_clang.js?version=${Date.now()}`);
   Object.assign(self, exports);
 })();
+self.dummy = [];
 
 async function initStateDict(event) {
   await kernelsReady;
@@ -19,9 +20,10 @@ function loadStateDict(event) {
     self.removeEventListener("message", loadStateDict);
   }
   else {
+    const part = event.data;
+    self.dummy.push(part.bytes);
     self.postMessage("success");
     return;
-    const part = event.data;
     for (const [wasm_idx, wasm_offset] of part.wasm_offsets) {
       self.model.wasm[wasm_idx].HEAPU8.set(part.bytes, wasm_offset);
       /*
