@@ -1,4 +1,4 @@
-window.TINYCHAT_ROOT = "/tinychat-test2/";
+window.TINYCHAT_ROOT = "/tinychat-test/";
 window.MODEL_BASE_URL= "https://huggingface.co/datasets/hooved/llama-3-2-1B-f32/resolve/main/test3";
 const queryParams = new URLSearchParams(window.location.search);
 const normalizedParams = Object.fromEntries([...queryParams].map(([key, value]) => [key.toUpperCase(), value.toUpperCase()]));
@@ -7,7 +7,6 @@ const isMobileAgent = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
 const hasTouchScreen = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 window.isMobile = isMobileAgent || hasTouchScreen;
 if (window.isMobile) document.documentElement.classList.add('mobile'); // prevent annoying auto-zoom when entering prompt on mobile
-window.TEST = normalizedParams["TEST"];
 
 const tiktokenReady = (async () => {
   const { init, get_encoding, Tiktoken, load } = await import('./tiktoken.js');
@@ -302,12 +301,14 @@ async function load_state_dict (data, device, progress) {
     for (const part of file.parts) {
       if (part.empty) continue;
       part.bytes = (part.size === file.bytes.length) ? file.bytes : file.bytes.slice(part.file_start_pos, part.file_start_pos + part.size);
+      part.isMobile = window.isMobile; // necessary for worker context
       if (valid_final_dtypes.has(part.dtype)) {
         if (window.BACKEND === "WebGPU") {
           device.queue.writeBuffer(state_dict[part.key].bytes, part.target_start_pos, part.bytes); // improves stability over mappedAtCreation writing
         }
         else if (window.BACKEND === "WASM") {
-          part.target_start_pos = state_dict[part.key].wasm_buf_start_pos + part.target_start_pos
+          const wasm_offsets = state_dict[part.key].wasm_offsets;
+          part.wasm_offsets = Object.entries(wasm_offsets).map(([wasm_idx, offset]) => [parseInt(wasm_idx), offset + part.target_start_pos]);
           const msg = await sendMessageToWorker(model, {header: "load_part", data: part});
         }
       }
@@ -324,7 +325,7 @@ async function load_state_dict (data, device, progress) {
     // prioritize files from downloaded queue, so we can continue downloading more files
     if (downloaded.length) {
       const file = downloaded.shift();
-      await saveTensorToDb(db, file.hash, file.bytes);
+      await saveTensorToDb(db, file.hash, file.bytes); // prevent race between indexedDB and wasm
       await loadFileToStateDict(file); // increments completed when done
     }
     else if (!downloaded.length && cachedFiles.length) {
@@ -386,16 +387,6 @@ document.addEventListener("alpine:init", () => {
       this.progress = makeProgress.call(this, totalSize); // creates closure with totalSize
 
       try {
-        if (window.TEST) {
-          await runTest(window.TEST, this.progress, device);
-          return;
-        }
-      } catch(error) {
-        this.progress(-1, `E: ${error}`);
-        throw new Error(error);
-      }
-
-      try {
         this.progress(0.01 * totalSize, "Loading tokenizer:");
         const wasmResponse = await fetch(`${window.MODEL_BASE_URL}/tiktoken_bg.wasm`);
         this.progress(0.01 * totalSize, "Loading tokenizer:");
@@ -412,12 +403,14 @@ document.addEventListener("alpine:init", () => {
 
       try {
         const model = await load_state_dict(data, device, this.progress);
+        this.progress(-1, "finished load_state_dict");
 
         if (window.BACKEND === "WebGPU") {
           this.nets = {"transformer": model};
         }
         else if (window.BACKEND === "WASM") {
           const msg = await sendMessageToWorker(model, {header: "load_part", data: "done"});
+          this.progress(-1, "worker setup");
           this.nets = {"transformer": async (tok, start_pos) => sendMessageToWorker(model, {header: "token", data: [tok, start_pos]})};
         }
         this.progress(0.01 * totalSize, `Launching ${window.BACKEND} model:`);
